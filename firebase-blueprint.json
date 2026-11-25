@@ -1,0 +1,293 @@
+{
+  "entities": {
+    "UserAccount": {
+      "title": "UserAccount",
+      "description": "Private user account profile containing verified email and personal metadata, readable and writable only by the account owner.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "fullName": { "type": "string" },
+        "username": { "type": "string" },
+        "email": { "type": "string" },
+        "bio": { "type": "string" },
+        "avatarColorHex": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "fullName", "username", "email", "avatarColorHex", "createdAt", "updatedAt"]
+    },
+    "PublicProfile": {
+      "title": "PublicProfile",
+      "description": "Non-PII public profile card for user discovery and real-time online presence.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "fullName": { "type": "string" },
+        "username": { "type": "string" },
+        "bio": { "type": "string" },
+        "avatarColorHex": { "type": "string" },
+        "discoverable": { "type": "boolean" },
+        "online": { "type": "boolean" },
+        "lastSeen": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "fullName", "username", "avatarColorHex", "discoverable", "online", "createdAt", "updatedAt"]
+    },
+    "UsernameReservation": {
+      "title": "UsernameReservation",
+      "description": "Unique username lock document preventing duplicate usernames.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "username": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "username", "createdAt"]
+    },
+    "EmailLookupEntry": {
+      "title": "EmailLookupEntry",
+      "description": "Privacy-preserving SHA-256 hashed email lookup index containing no raw email PII.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "username": { "type": "string" },
+        "fullName": { "type": "string" },
+        "avatarColorHex": { "type": "string" },
+        "discoverableByEmail": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "username", "fullName", "avatarColorHex", "discoverableByEmail", "updatedAt"]
+    },
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "Owner-only privacy and notification preferences.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "discoverable": { "type": "boolean" },
+        "discoverableByEmail": { "type": "boolean" },
+        "showOnlineStatus": { "type": "boolean" },
+        "showReadReceipts": { "type": "boolean" },
+        "notificationsEnabled": { "type": "boolean" },
+        "showNotificationPreview": { "type": "boolean" },
+        "fcmToken": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "discoverable", "discoverableByEmail", "showOnlineStatus", "showReadReceipts", "notificationsEnabled", "showNotificationPreview", "createdAt", "updatedAt"]
+    },
+    "ContactEntry": {
+      "title": "ContactEntry",
+      "description": "Saved contact reference scoped under a user's private contacts subcollection.",
+      "type": "object",
+      "properties": {
+        "contactUid": { "type": "string" },
+        "fullName": { "type": "string" },
+        "username": { "type": "string" },
+        "avatarColorHex": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["contactUid", "fullName", "username", "avatarColorHex", "createdAt"]
+    },
+    "PrivateChat": {
+      "title": "PrivateChat",
+      "description": "One-to-one private conversation document keyed deterministically by sorted participant UIDs.",
+      "type": "object",
+      "properties": {
+        "participantIds": { "type": "array" },
+        "participantNames": { "type": "object" },
+        "participantUsernames": { "type": "object" },
+        "participantColors": { "type": "object" },
+        "lastMessageText": { "type": "string" },
+        "lastMessageSenderId": { "type": "string" },
+        "lastMessageStatus": { "type": "string", "enum": ["SENT", "DELIVERED", "SEEN"] },
+        "lastMessageTime": { "type": "string", "format": "date-time" },
+        "unreadCounts": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["participantIds", "participantNames", "participantUsernames", "participantColors", "lastMessageText", "lastMessageSenderId", "lastMessageStatus", "unreadCounts", "createdAt", "updatedAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Real-time text or media message inside a private 1:1 conversation.",
+      "type": "object",
+      "properties": {
+        "chatId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "recipientId": { "type": "string" },
+        "participantIds": { "type": "array" },
+        "text": { "type": "string" },
+        "status": { "type": "string", "enum": ["SENT", "DELIVERED", "SEEN"] },
+        "messageType": { "type": "string", "enum": ["TEXT", "IMAGE", "VIDEO"] },
+        "mediaId": { "type": "string" },
+        "mediaMimeType": { "type": "string" },
+        "mediaSizeBytes": { "type": "integer" },
+        "mediaDurationMs": { "type": "integer" },
+        "mediaWidth": { "type": "integer" },
+        "mediaHeight": { "type": "integer" },
+        "mediaChunkCount": { "type": "integer" },
+        "replyToMessageId": { "type": "string" },
+        "replyToText": { "type": "string" },
+        "replyToSenderName": { "type": "string" },
+        "deleted": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["chatId", "senderId", "recipientId", "participantIds", "text", "status", "deleted", "createdAt", "updatedAt"]
+    },
+    "ChatMediaMetadata": {
+      "title": "ChatMediaMetadata",
+      "description": "Private participant-locked photo or video metadata and inline preview thumbnail.",
+      "type": "object",
+      "properties": {
+        "mediaId": { "type": "string" },
+        "chatId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "recipientId": { "type": "string" },
+        "participantIds": { "type": "array" },
+        "mediaType": { "type": "string", "enum": ["IMAGE", "VIDEO"] },
+        "mimeType": { "type": "string" },
+        "fileName": { "type": "string" },
+        "sizeBytes": { "type": "integer" },
+        "chunkCount": { "type": "integer" },
+        "width": { "type": "integer" },
+        "height": { "type": "integer" },
+        "durationMs": { "type": "integer" },
+        "uploadComplete": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["mediaId", "chatId", "senderId", "recipientId", "participantIds", "mediaType", "mimeType", "fileName", "sizeBytes", "chunkCount", "uploadComplete", "createdAt", "updatedAt"]
+    },
+    "ChatMediaChunk": {
+      "title": "ChatMediaChunk",
+      "description": "Binary Blob chunk for private chat media.",
+      "type": "object",
+      "properties": {
+        "chunkIndex": { "type": "integer" },
+        "senderId": { "type": "string" },
+        "participantIds": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["chunkIndex", "senderId", "participantIds", "createdAt"]
+    },
+    "CallSession": {
+      "title": "CallSession",
+      "description": "Temporary 1:1 WebRTC signaling document restricted to call participants.",
+      "type": "object",
+      "properties": {
+        "chatId": { "type": "string" },
+        "callerId": { "type": "string" },
+        "callerName": { "type": "string" },
+        "callerUsername": { "type": "string" },
+        "callerColorHex": { "type": "string" },
+        "calleeId": { "type": "string" },
+        "calleeName": { "type": "string" },
+        "calleeUsername": { "type": "string" },
+        "calleeColorHex": { "type": "string" },
+        "participantIds": { "type": "array" },
+        "callType": { "type": "string", "enum": ["AUDIO", "VIDEO"] },
+        "status": { "type": "string", "enum": ["RINGING", "ACCEPTED", "REJECTED", "ENDED", "MISSED"] },
+        "offerSdp": { "type": "string" },
+        "answerSdp": { "type": "string" },
+        "durationSeconds": { "type": "integer" },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "endedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["chatId", "callerId", "callerName", "callerUsername", "callerColorHex", "calleeId", "calleeName", "calleeUsername", "calleeColorHex", "participantIds", "callType", "status", "durationSeconds", "createdAt", "updatedAt"]
+    },
+    "IceCandidateEntry": {
+      "title": "IceCandidateEntry",
+      "description": "Temporary WebRTC ICE candidate exchange record.",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "participantIds": { "type": "array" },
+        "sdpMid": { "type": "string" },
+        "sdpMLineIndex": { "type": "integer" },
+        "candidate": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderId", "participantIds", "sdpMid", "sdpMLineIndex", "candidate", "createdAt"]
+    },
+    "CallHistoryEntry": {
+      "title": "CallHistoryEntry",
+      "description": "Persistent call log shared securely between the two call participants.",
+      "type": "object",
+      "properties": {
+        "callId": { "type": "string" },
+        "callerId": { "type": "string" },
+        "callerName": { "type": "string" },
+        "callerColorHex": { "type": "string" },
+        "calleeId": { "type": "string" },
+        "calleeName": { "type": "string" },
+        "calleeColorHex": { "type": "string" },
+        "participantIds": { "type": "array" },
+        "callType": { "type": "string", "enum": ["AUDIO", "VIDEO"] },
+        "outcome": { "type": "string", "enum": ["COMPLETED", "MISSED", "REJECTED", "CANCELLED"] },
+        "durationSeconds": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["callId", "callerId", "callerName", "callerColorHex", "calleeId", "calleeName", "calleeColorHex", "participantIds", "callType", "outcome", "durationSeconds", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserAccount" },
+      "description": "Private user account records, accessible exclusively by the authenticated owner."
+    },
+    "/publicProfiles/{userId}": {
+      "schema": { "$ref": "#/entities/PublicProfile" },
+      "description": "Public discoverable profile cards without PII."
+    },
+    "/usernames/{username}": {
+      "schema": { "$ref": "#/entities/UsernameReservation" },
+      "description": "Unique username locks to enforce zero duplicate usernames."
+    },
+    "/emailLookup/{emailHash}": {
+      "schema": { "$ref": "#/entities/EmailLookupEntry" },
+      "description": "Privacy-safe SHA-256 email discovery index."
+    },
+    "/userSettings/{userId}": {
+      "schema": { "$ref": "#/entities/UserSettings" },
+      "description": "Owner-only privacy and notification preferences."
+    },
+    "/users/{userId}/contacts/{contactUid}": {
+      "schema": { "$ref": "#/entities/ContactEntry" },
+      "description": "User's saved contacts subcollection."
+    },
+    "/chats/{chatId}": {
+      "schema": { "$ref": "#/entities/PrivateChat" },
+      "description": "One-to-one private chat metadata documents."
+    },
+    "/chats/{chatId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Text and media messages belonging to a private one-to-one chat."
+    },
+    "/chats/{chatId}/media/{mediaId}": {
+      "schema": { "$ref": "#/entities/ChatMediaMetadata" },
+      "description": "Private media metadata documents locked to chat participants."
+    },
+    "/chats/{chatId}/media/{mediaId}/chunks/{chunkId}": {
+      "schema": { "$ref": "#/entities/ChatMediaChunk" },
+      "description": "Chunked media binary data locked to chat participants."
+    },
+    "/calls/{callId}": {
+      "schema": { "$ref": "#/entities/CallSession" },
+      "description": "Active WebRTC 1:1 call signaling documents."
+    },
+    "/calls/{callId}/candidates/{candidateId}": {
+      "schema": { "$ref": "#/entities/IceCandidateEntry" },
+      "description": "Temporary ICE candidates for active calls."
+    },
+    "/callHistory/{historyId}": {
+      "schema": { "$ref": "#/entities/CallHistoryEntry" },
+      "description": "Persistent call history logs for participants."
+    }
+  }
+}
