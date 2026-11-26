@@ -364,9 +364,21 @@ fun ProfileTab(
                             progress = (quota.dailyMediaBytes.toFloat() / quota.maxDailyMediaBytes.toFloat()).coerceIn(0f, 1f),
                             isExceeded = quota.dailyMediaBytes >= quota.maxDailyMediaBytes
                         )
+                        QuotaUsageRow(
+                            label = "Metered Free TURN Relay (Month)",
+                            valueText = "${ChatUtils.formatFileSize(quota.monthlyTurnBytes)} / 20 GB",
+                            progress = (quota.monthlyTurnBytes.toFloat() / quota.maxMonthlyTurnBytes.toFloat()).coerceIn(0f, 1f),
+                            isExceeded = quota.isTurnRelayBlocked
+                        )
+                        QuotaUsageRow(
+                            label = "Metered Realtime Signals (Month)",
+                            valueText = "${quota.monthlyRealtimeMessages} / ${quota.maxMonthlyRealtimeMessages}",
+                            progress = (quota.monthlyRealtimeMessages.toFloat() / quota.maxMonthlyRealtimeMessages.toFloat()).coerceIn(0f, 1f),
+                            isExceeded = quota.isRealtimeSignalingBlocked
+                        )
 
                         Text(
-                            text = "Runs strictly on the Firebase Spark free plan with no Metered, TURN, or third-party API keys required. Audio and video calling are currently disabled; text chat and compressed image sharing pause automatically if daily free limits are reached.",
+                            text = "Strictly free-tier only: Firebase Spark + free Google STUN + optional Metered Open Relay free TURN (configured safely via BuildConfig secrets). Video calls are capped at 480x360 @ 18fps (450 kbps) to save mobile data, and any exceeded quota pauses cleanly without billing.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

@@ -26,8 +26,28 @@ class MyChatFirebaseMessagingService : FirebaseMessagingService() {
         super.onMessageReceived(message)
         val data = message.data
         val type = data["type"].orEmpty()
-        if (type == "INCOMING_CALL" || type == "CALL_ENDED" || type == "CALL_CANCELLED") {
-            return
+        when (type) {
+            "INCOMING_CALL" -> {
+                val callId = data["callId"].orEmpty()
+                val callerName = data["callerName"] ?: message.notification?.title ?: "My Chat User"
+                val isVideo = data["callType"].equals("VIDEO", ignoreCase = true)
+                if (callId.isNotBlank()) {
+                    ChatNotificationHelper.showIncomingCallNotification(
+                        context = applicationContext,
+                        callId = callId,
+                        callerName = callerName,
+                        isVideo = isVideo
+                    )
+                }
+                return
+            }
+            "CALL_ENDED", "CALL_CANCELLED" -> {
+                val callId = data["callId"].orEmpty()
+                if (callId.isNotBlank()) {
+                    ChatNotificationHelper.dismissCallNotification(applicationContext, callId)
+                }
+                return
+            }
         }
 
         val chatId = data["chatId"].orEmpty()

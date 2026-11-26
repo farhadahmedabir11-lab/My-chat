@@ -1,8 +1,16 @@
 package com.example
 
 import com.example.data.ChatUtils
+import com.example.data.FreeTierQuotaManager
+import com.example.data.FreeTierQuotaSnapshot
+import com.example.data.MediaProcessor
+import com.example.model.CallHistoryEntry
+import com.example.model.CallOutcome
+import com.example.model.CallType
 import com.example.model.MessageStatus
+import com.example.model.MessageType
 import com.example.model.PrivateChat
+import com.example.webrtc.WebRtcCallClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -73,7 +81,7 @@ class ExampleUnitTest {
 
     @Test
     fun `call history entry resolves direction peer and outcome safely`() {
-        val entry = com.example.model.CallHistoryEntry(
+        val entry = CallHistoryEntry(
             id = "call_1",
             callId = "call_1",
             callerId = "alice",
@@ -89,39 +97,62 @@ class ExampleUnitTest {
         assertFalse(entry.isOutgoing("bob"))
         assertEquals("Bob", entry.peerName("alice"))
         assertEquals("Alice", entry.peerName("bob"))
-        assertEquals(com.example.model.CallType.VIDEO, entry.parsedCallType)
-        assertEquals(com.example.model.CallOutcome.MISSED, entry.parsedOutcome)
-        assertEquals(com.example.model.MessageType.IMAGE, com.example.model.MessageType.fromRaw("IMAGE"))
-        assertEquals(com.example.model.MessageType.TEXT, com.example.model.MessageType.fromRaw(null))
+        assertEquals(CallType.VIDEO, entry.parsedCallType)
+        assertEquals(CallOutcome.MISSED, entry.parsedOutcome)
+        assertEquals(MessageType.IMAGE, MessageType.fromRaw("IMAGE"))
+        assertEquals(MessageType.TEXT, MessageType.fromRaw(null))
     }
 
     @Test
-    fun `free tier quota snapshot blocks media and writes cleanly when limits exceeded`() {
-        val base = com.example.data.FreeTierQuotaSnapshot(
-            dayKey = "2026-11-24",
+    fun `free tier quota snapshot blocks media calls TURN and realtime cleanly when limits exceeded`() {
+        val base = FreeTierQuotaSnapshot(
+            dayKey = "2026-11-26",
+            monthKey = "2026-11",
             dailyFirestoreWrites = 100L,
-            maxDailyFirestoreWrites = com.example.data.FreeTierQuotaManager.MAX_DAILY_FIRESTORE_WRITES,
+            maxDailyFirestoreWrites = FreeTierQuotaManager.MAX_DAILY_FIRESTORE_WRITES,
             dailyMediaBytes = 1024L,
-            maxDailyMediaBytes = com.example.data.FreeTierQuotaManager.MAX_DAILY_MEDIA_BYTES,
+            maxDailyMediaBytes = FreeTierQuotaManager.MAX_DAILY_MEDIA_BYTES,
+            monthlyTurnBytes = 1024L,
+            maxMonthlyTurnBytes = FreeTierQuotaManager.MAX_MONTHLY_TURN_BYTES,
+            monthlyRealtimeMessages = 10L,
+            maxMonthlyRealtimeMessages = FreeTierQuotaManager.MAX_MONTHLY_REALTIME_MESSAGES,
             firestoreQuotaExceeded = false,
+            turnQuotaExceeded = false,
+            realtimeQuotaExceeded = false,
             activeWarningMessage = null
         )
         assertFalse(base.isMediaBlocked)
+        assertFalse(base.isCallsBlocked)
+        assertFalse(base.isTurnRelayBlocked)
+        assertFalse(base.isRealtimeSignalingBlocked)
 
-        val mediaCapped = base.copy(dailyMediaBytes = com.example.data.FreeTierQuotaManager.MAX_DAILY_MEDIA_BYTES)
+        val mediaCapped = base.copy(dailyMediaBytes = FreeTierQuotaManager.MAX_DAILY_MEDIA_BYTES)
         assertTrue(mediaCapped.isMediaBlocked)
 
-        val writeCapped = base.copy(dailyFirestoreWrites = com.example.data.FreeTierQuotaManager.MAX_DAILY_FIRESTORE_WRITES)
+        val writeCapped = base.copy(dailyFirestoreWrites = FreeTierQuotaManager.MAX_DAILY_FIRESTORE_WRITES)
         assertTrue(writeCapped.isMediaBlocked)
+        assertTrue(writeCapped.isCallsBlocked)
 
         val quotaFlagged = base.copy(firestoreQuotaExceeded = true)
         assertTrue(quotaFlagged.isMediaBlocked)
+        assertTrue(quotaFlagged.isCallsBlocked)
+
+        val turnCapped = base.copy(monthlyTurnBytes = FreeTierQuotaManager.MAX_MONTHLY_TURN_BYTES)
+        assertTrue(turnCapped.isTurnRelayBlocked)
+
+        val realtimeCapped = base.copy(monthlyRealtimeMessages = FreeTierQuotaManager.MAX_MONTHLY_REALTIME_MESSAGES)
+        assertTrue(realtimeCapped.isRealtimeSignalingBlocked)
     }
 
     @Test
-    fun `bandwidth optimization constants keep shared images and media within Spark free tier budgets`() {
-        assertEquals(10L * 1024L * 1024L, com.example.data.MediaProcessor.MAX_VIDEO_BYTES)
-        assertEquals(1080, com.example.data.MediaProcessor.MAX_IMAGE_DIMENSION)
-        assertEquals(380_000, com.example.data.MediaProcessor.MAX_PHOTO_BYTES)
+    fun `bandwidth optimization constants keep shared media and WebRTC calls within free tier budgets`() {
+        assertEquals(10L * 1024L * 1024L, MediaProcessor.MAX_VIDEO_BYTES)
+        assertEquals(1080, MediaProcessor.MAX_IMAGE_DIMENSION)
+        assertEquals(380_000, MediaProcessor.MAX_PHOTO_BYTES)
+        assertEquals(480, WebRtcCallClient.MAX_VIDEO_WIDTH)
+        assertEquals(360, WebRtcCallClient.MAX_VIDEO_HEIGHT)
+        assertEquals(18, WebRtcCallClient.MAX_VIDEO_FPS)
+        assertEquals(450_000, WebRtcCallClient.MAX_VIDEO_BITRATE_BPS)
+        assertEquals(32_000, WebRtcCallClient.MAX_AUDIO_BITRATE_BPS)
     }
 }

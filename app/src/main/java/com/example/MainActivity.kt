@@ -1,10 +1,14 @@
 package com.example
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
@@ -20,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.credentials.CredentialManager
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -32,9 +37,9 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.data.CallRepository
 import com.example.data.ChatRepository
 import com.example.data.FreeTierQuotaManager
 import com.example.data.MediaRepository
@@ -42,14 +47,20 @@ import com.example.data.UserRepository
 import com.example.data.attemptAutoSignIn
 import com.example.data.authStateFlow
 import com.example.data.signOutSession
+import com.example.model.CallSession
+import com.example.model.CallType
+import com.example.model.PublicProfile
 import com.example.model.UiState
 import com.example.notifications.ChatNotificationHelper
 import com.example.ui.screens.AuthScreen
+import com.example.ui.screens.CallScreen
 import com.example.ui.screens.ChatScreen
 import com.example.ui.screens.HomeScreen
+import com.example.ui.screens.IncomingCallOverlay
 import com.example.ui.screens.ProfileSetupScreen
 import com.example.ui.theme.MyChatBluePrimary
 import com.example.ui.theme.MyChatTheme
+import com.example.viewmodel.CallViewModel
 import com.example.viewmodel.ChatViewModel
 import com.example.viewmodel.MainViewModel
 import com.google.firebase.Firebase
@@ -61,8 +72,20 @@ import com.google.firebase.firestore.FirebaseFirestore
 private const val ROUTE_HOME = "home"
 private const val ROUTE_CHAT = "chat/{chatId}"
 
+private sealed interface PendingCallLaunch {
+    data class Outgoing(
+        val peerUid: String,
+        val peerName: String,
+        val peerColorHex: String,
+        val callType: CallType
+    ) : PendingCallLaunch
+
+    data class Incoming(val session: CallSession) : PendingCallLaunch
+}
+
 class MainActivity : ComponentActivity() {
     private var pendingChatId by mutableStateOf<String?>(null)
+    private var pendingCallId by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,7 +98,9 @@ class MainActivity : ComponentActivity() {
             MyChatTheme {
                 AppRoot(
                     pendingChatId = pendingChatId,
-                    onConsumedPendingChat = { pendingChatId = null }
+                    pendingCallId = pendingCallId,
+                    onConsumedPendingChat = { pendingChatId = null },
+                    onConsumedPendingCall = { pendingCallId = null }
                 )
             }
         }
@@ -92,13 +117,19 @@ class MainActivity : ComponentActivity() {
         if (!chatId.isNullOrBlank()) {
             pendingChatId = chatId
         }
+        val callId = intent.getStringExtra(ChatNotificationHelper.EXTRA_CALL_ID)
+        if (!callId.isNullOrBlank()) {
+            pendingCallId = callId
+        }
     }
 }
 
 @Composable
 private fun AppRoot(
     pendingChatId: String?,
+    pendingCallId: String?,
     onConsumedPendingChat: () -> Unit,
+    onConsumedPendingCall: () -> Unit,
     auth: FirebaseAuth = Firebase.auth
 ) {
     val context = LocalContext.current
@@ -139,7 +170,9 @@ private fun AppRoot(
                 AuthenticatedApp(
                     firebaseUser = user,
                     pendingChatId = pendingChatId,
+                    pendingCallId = pendingCallId,
                     onConsumedPendingChat = onConsumedPendingChat,
+                    onConsumedPendingCall = onConsumedPendingCall,
                     credentialManager = credentialManager
                 )
             }
@@ -151,7 +184,9 @@ private fun AppRoot(
 private fun AuthenticatedApp(
     firebaseUser: FirebaseUser,
     pendingChatId: String?,
+    pendingCallId: String?,
     onConsumedPendingChat: () -> Unit,
+    onConsumedPendingCall: () -> Unit,
     credentialManager: CredentialManager
 ) {
     val uid = firebaseUser.uid
@@ -175,6 +210,22 @@ private fun AuthenticatedApp(
         }
     )
 
+    val callViewModel: CallViewModel = viewModel(
+        key = "calls_$uid",
+        factory = viewModelFactory {
+            initializer {
+                val app = checkNotNull(this[APPLICATION_KEY])
+                val databaseId = app.getString(R.string.firestore_database_id)
+                val db = FirebaseFirestore.getInstance(databaseId)
+                CallViewModel(
+                    callRepository = CallRepository(db),
+                    appContext = app.applicationContext,
+                    currentUserId = uid
+                )
+            }
+        }
+    )
+
     val accountState by mainViewModel.accountState.collectAsStateWithLifecycle()
     val settings by mainViewModel.settingsState.collectAsStateWithLifecycle()
     val chatsState by mainViewModel.chatsState.collectAsStateWithLifecycle()
@@ -185,12 +236,86 @@ private fun AuthenticatedApp(
     val actionMessage by mainViewModel.actionMessage.collectAsStateWithLifecycle()
     val isBusy by mainViewModel.isBusy.collectAsStateWithLifecycle()
 
+    val callHistoryState by callViewModel.callHistoryState.collectAsStateWithLifecycle()
+    val incomingCall by callViewModel.incomingCall.collectAsStateWithLifecycle()
+    val activeCallState by callViewModel.activeCallState.collectAsStateWithLifecycle()
+    val hasRemoteVideo by callViewModel.hasRemoteVideo.collectAsStateWithLifecycle()
+
     val navController = rememberNavController()
 
     var activeChatId by remember { mutableStateOf<String?>(null) }
     var isAppInForeground by remember { mutableStateOf(true) }
     var lastNotifiedKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
     var initialChatsLoaded by remember { mutableStateOf(false) }
+    var pendingCallLaunch by remember { mutableStateOf<PendingCallLaunch?>(null) }
+
+    val callPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val launch = pendingCallLaunch
+        pendingCallLaunch = null
+        val audioGranted = results[Manifest.permission.RECORD_AUDIO] == true ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        if (!audioGranted || launch == null) return@rememberLauncherForActivityResult
+
+        val myAccount = (accountState as? UiState.Success)?.data
+        when (launch) {
+            is PendingCallLaunch.Outgoing -> {
+                if (myAccount != null) {
+                    callViewModel.startOutgoingCall(
+                        caller = myAccount,
+                        callee = PublicProfile(
+                            uid = launch.peerUid,
+                            fullName = launch.peerName,
+                            avatarColorHex = launch.peerColorHex
+                        ),
+                        callType = launch.callType
+                    )
+                }
+            }
+            is PendingCallLaunch.Incoming -> {
+                callViewModel.acceptIncomingCall(launch.session)
+            }
+        }
+    }
+
+    val launchCallWithPermissions: (PendingCallLaunch) -> Unit = { launch ->
+        val needsCamera = when (launch) {
+            is PendingCallLaunch.Outgoing -> launch.callType == CallType.VIDEO
+            is PendingCallLaunch.Incoming -> launch.session.parsedType == CallType.VIDEO
+        }
+        val required = buildList {
+            add(Manifest.permission.RECORD_AUDIO)
+            if (needsCamera) add(Manifest.permission.CAMERA)
+        }
+        val allGranted = required.all { perm ->
+            ContextCompat.checkSelfPermission(context, perm) == PackageManager.PERMISSION_GRANTED
+        }
+        if (allGranted) {
+            val myAccount = (accountState as? UiState.Success)?.data
+            when (launch) {
+                is PendingCallLaunch.Outgoing -> {
+                    if (myAccount != null) {
+                        callViewModel.startOutgoingCall(
+                            caller = myAccount,
+                            callee = PublicProfile(
+                                uid = launch.peerUid,
+                                fullName = launch.peerName,
+                                avatarColorHex = launch.peerColorHex
+                            ),
+                            callType = launch.callType
+                        )
+                    }
+                }
+                is PendingCallLaunch.Incoming -> {
+                    callViewModel.acceptIncomingCall(launch.session)
+                }
+            }
+        } else {
+            pendingCallLaunch = launch
+            callPermissionLauncher.launch(required.toTypedArray())
+        }
+    }
 
     val handleLogout: () -> Unit = {
         signOutSession(
@@ -313,6 +438,26 @@ private fun AuthenticatedApp(
                     lastNotifiedKeys = incomingKeys
                 }
 
+                // Trigger notification for incoming call when app is backgrounded
+                LaunchedEffect(incomingCall, isAppInForeground) {
+                    val incoming = incomingCall ?: return@LaunchedEffect
+                    if (!isAppInForeground) {
+                        ChatNotificationHelper.showIncomingCallNotification(
+                            context = context,
+                            callId = incoming.id,
+                            callerName = incoming.callerName,
+                            isVideo = incoming.parsedType == CallType.VIDEO
+                        )
+                    }
+                }
+
+                LaunchedEffect(pendingCallId, incomingCall) {
+                    if (!pendingCallId.isNullOrBlank() && incomingCall?.id == pendingCallId) {
+                        launchCallWithPermissions(PendingCallLaunch.Incoming(incomingCall!!))
+                        onConsumedPendingCall()
+                    }
+                }
+
                 LaunchedEffect(pendingChatId) {
                     if (!pendingChatId.isNullOrBlank()) {
                         navController.navigate("chat/$pendingChatId") {
@@ -334,6 +479,7 @@ private fun AuthenticatedApp(
                                 account = account,
                                 settings = settings,
                                 chatsState = chatsState,
+                                callHistoryState = callHistoryState,
                                 contactsState = contactsState,
                                 searchResultsState = searchResultsState,
                                 peerProfiles = peerProfiles,
@@ -352,6 +498,16 @@ private fun AuthenticatedApp(
                                             launchSingleTop = true
                                         }
                                     }
+                                },
+                                onAudioCallPeer = { peerUid, peerName, peerColor ->
+                                    launchCallWithPermissions(
+                                        PendingCallLaunch.Outgoing(peerUid, peerName, peerColor, CallType.AUDIO)
+                                    )
+                                },
+                                onVideoCallPeer = { peerUid, peerName, peerColor ->
+                                    launchCallWithPermissions(
+                                        PendingCallLaunch.Outgoing(peerUid, peerName, peerColor, CallType.VIDEO)
+                                    )
                                 },
                                 onToggleContact = mainViewModel::toggleContact,
                                 onFetchPublicProfile = mainViewModel::fetchPublicProfile,
@@ -392,9 +548,47 @@ private fun AuthenticatedApp(
                                 viewModel = chatViewModel,
                                 currentUserId = uid,
                                 sendReadReceipts = settings.showReadReceipts,
+                                onStartAudioCall = { peerUid, peerName, peerColor ->
+                                    launchCallWithPermissions(
+                                        PendingCallLaunch.Outgoing(peerUid, peerName, peerColor, CallType.AUDIO)
+                                    )
+                                },
+                                onStartVideoCall = { peerUid, peerName, peerColor ->
+                                    launchCallWithPermissions(
+                                        PendingCallLaunch.Outgoing(peerUid, peerName, peerColor, CallType.VIDEO)
+                                    )
+                                },
                                 onBack = { navController.popBackStack() }
                             )
                         }
+                    }
+
+                    // Active 1-to-1 WebRTC audio/video call screen
+                    if (activeCallState.session != null) {
+                        CallScreen(
+                            callState = activeCallState,
+                            currentUserId = uid,
+                            hasRemoteVideo = hasRemoteVideo,
+                            eglBaseContext = callViewModel.getEglBaseContext(),
+                            onAttachLocalRenderer = callViewModel::attachLocalRenderer,
+                            onAttachRemoteRenderer = callViewModel::attachRemoteRenderer,
+                            onToggleMute = callViewModel::toggleMute,
+                            onToggleSpeaker = callViewModel::toggleSpeaker,
+                            onToggleCamera = callViewModel::toggleCamera,
+                            onSwitchCamera = callViewModel::switchCamera,
+                            onEndCall = callViewModel::endActiveCall
+                        )
+                    } else if (incomingCall != null) {
+                        IncomingCallOverlay(
+                            session = incomingCall!!,
+                            onAccept = {
+                                launchCallWithPermissions(PendingCallLaunch.Incoming(incomingCall!!))
+                            },
+                            onReject = {
+                                callViewModel.rejectIncomingCall(incomingCall!!)
+                            },
+                            modifier = Modifier.align(Alignment.TopCenter)
+                        )
                     }
                 }
             }

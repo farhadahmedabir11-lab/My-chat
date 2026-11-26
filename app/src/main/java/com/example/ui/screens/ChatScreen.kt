@@ -40,6 +40,7 @@ import androidx.compose.material.icons.automirrored.rounded.Reply
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Block
+import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Download
@@ -94,6 +95,7 @@ import coil.compose.AsyncImage
 import com.example.data.ChatUtils
 import com.example.data.FreeTierQuotaManager
 import com.example.data.MediaProcessor
+import com.example.model.CallType
 import com.example.model.ChatMessage
 import com.example.model.MediaDownloadState
 import com.example.model.MediaUploadTask
@@ -123,6 +125,8 @@ fun ChatScreen(
     viewModel: ChatViewModel,
     currentUserId: String,
     sendReadReceipts: Boolean,
+    onStartAudioCall: (peerUid: String, peerName: String, peerColorHex: String) -> Unit,
+    onStartVideoCall: (peerUid: String, peerName: String, peerColorHex: String) -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -278,6 +282,30 @@ fun ChatScreen(
                                     },
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (isPeerOnline) Color(0xFFBBF7D0) else Color.White.copy(alpha = 0.8f)
+                                )
+                            }
+                        }
+                    },
+                    actions = {
+                        if (peerUid.isNotBlank()) {
+                            IconButton(
+                                onClick = { onStartAudioCall(peerUid, peerName, peerColor) },
+                                enabled = !quota.isCallsBlocked,
+                                modifier = Modifier.testTag("chat_audio_call_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Call,
+                                    contentDescription = "Audio call $peerName"
+                                )
+                            }
+                            IconButton(
+                                onClick = { onStartVideoCall(peerUid, peerName, peerColor) },
+                                enabled = !quota.isCallsBlocked,
+                                modifier = Modifier.testTag("chat_video_call_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Videocam,
+                                    contentDescription = "Video call $peerName"
                                 )
                             }
                         }

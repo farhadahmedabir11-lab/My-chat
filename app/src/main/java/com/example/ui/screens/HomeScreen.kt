@@ -22,8 +22,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.outlined.Chat
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Contacts
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.rounded.AddComment
@@ -60,6 +62,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.example.model.CallHistoryEntry
 import com.example.model.ContactEntry
 import com.example.model.PrivateChat
 import com.example.model.PublicProfile
@@ -78,6 +81,7 @@ fun HomeScreen(
     account: UserAccount,
     settings: UserSettings,
     chatsState: UiState<List<PrivateChat>>,
+    callHistoryState: UiState<List<CallHistoryEntry>>,
     contactsState: UiState<List<ContactEntry>>,
     searchResultsState: UiState<List<PublicProfile>>,
     peerProfiles: Map<String, PublicProfile>,
@@ -87,6 +91,8 @@ fun HomeScreen(
     onOpenChat: (String) -> Unit,
     onSearchUsers: (String) -> Unit,
     onStartChat: (PublicProfile) -> Unit,
+    onAudioCallPeer: (peerUid: String, peerName: String, peerColorHex: String) -> Unit,
+    onVideoCallPeer: (peerUid: String, peerName: String, peerColorHex: String) -> Unit,
     onToggleContact: (PublicProfile, Boolean) -> Unit,
     onFetchPublicProfile: suspend (String) -> PublicProfile?,
     onUpdateProfile: (String, String, String, () -> Unit) -> Unit,
@@ -184,7 +190,7 @@ fun HomeScreen(
             floatingActionButton = {
                 if (selectedTab == 0) {
                     FloatingActionButton(
-                        onClick = { selectedTab = 1 },
+                        onClick = { selectedTab = 2 },
                         containerColor = MyChatBluePrimary,
                         contentColor = Color.White,
                         shape = RoundedCornerShape(18.dp),
@@ -233,6 +239,23 @@ fun HomeScreen(
                         NavigationBarItem(
                             selected = selectedTab == 1,
                             onClick = { selectedTab = 1 },
+                            modifier = Modifier.testTag("nav_calls"),
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MyChatBluePrimary,
+                                selectedTextColor = MyChatBluePrimary,
+                                indicatorColor = MaterialTheme.colorScheme.primaryContainer
+                            ),
+                            icon = {
+                                Icon(
+                                    imageVector = if (selectedTab == 1) Icons.Filled.Call else Icons.Outlined.Call,
+                                    contentDescription = "Calls"
+                                )
+                            },
+                            label = { Text("Calls") }
+                        )
+                        NavigationBarItem(
+                            selected = selectedTab == 2,
+                            onClick = { selectedTab = 2 },
                             modifier = Modifier.testTag("nav_contacts"),
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = MyChatBluePrimary,
@@ -241,15 +264,15 @@ fun HomeScreen(
                             ),
                             icon = {
                                 Icon(
-                                    imageVector = if (selectedTab == 1) Icons.Filled.Contacts else Icons.Outlined.Contacts,
+                                    imageVector = if (selectedTab == 2) Icons.Filled.Contacts else Icons.Outlined.Contacts,
                                     contentDescription = "Contacts"
                                 )
                             },
                             label = { Text("Contacts") }
                         )
                         NavigationBarItem(
-                            selected = selectedTab == 2,
-                            onClick = { selectedTab = 2 },
+                            selected = selectedTab == 3,
+                            onClick = { selectedTab = 3 },
                             modifier = Modifier.testTag("nav_profile"),
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = MyChatBluePrimary,
@@ -258,7 +281,7 @@ fun HomeScreen(
                             ),
                             icon = {
                                 Icon(
-                                    imageVector = if (selectedTab == 2) Icons.Filled.Person else Icons.Outlined.Person,
+                                    imageVector = if (selectedTab == 3) Icons.Filled.Person else Icons.Outlined.Person,
                                     contentDescription = "Profile"
                                 )
                             },
@@ -294,18 +317,29 @@ fun HomeScreen(
                             onClick = { selectedTab = 1 },
                             icon = {
                                 Icon(
-                                    imageVector = if (selectedTab == 1) Icons.Filled.Contacts else Icons.Outlined.Contacts,
-                                    contentDescription = "Contacts"
+                                    imageVector = if (selectedTab == 1) Icons.Filled.Call else Icons.Outlined.Call,
+                                    contentDescription = "Calls"
                                 )
                             },
-                            label = { Text("Contacts") }
+                            label = { Text("Calls") }
                         )
                         NavigationRailItem(
                             selected = selectedTab == 2,
                             onClick = { selectedTab = 2 },
                             icon = {
                                 Icon(
-                                    imageVector = if (selectedTab == 2) Icons.Filled.Person else Icons.Outlined.Person,
+                                    imageVector = if (selectedTab == 2) Icons.Filled.Contacts else Icons.Outlined.Contacts,
+                                    contentDescription = "Contacts"
+                                )
+                            },
+                            label = { Text("Contacts") }
+                        )
+                        NavigationRailItem(
+                            selected = selectedTab == 3,
+                            onClick = { selectedTab = 3 },
+                            icon = {
+                                Icon(
+                                    imageVector = if (selectedTab == 3) Icons.Filled.Person else Icons.Outlined.Person,
                                     contentDescription = "Profile"
                                 )
                             },
@@ -320,9 +354,15 @@ fun HomeScreen(
                         chatsState = chatsState,
                         peerProfiles = peerProfiles,
                         onChatClick = onOpenChat,
-                        onFindPeopleClick = { selectedTab = 1 }
+                        onFindPeopleClick = { selectedTab = 2 }
                     )
-                    1 -> ContactsTab(
+                    1 -> CallsTab(
+                        currentUserId = currentUserId,
+                        historyState = callHistoryState,
+                        onAudioCallPeer = onAudioCallPeer,
+                        onVideoCallPeer = onVideoCallPeer
+                    )
+                    2 -> ContactsTab(
                         searchResultsState = searchResultsState,
                         contactsState = contactsState,
                         onSearchQueryChanged = onSearchUsers,
@@ -330,7 +370,7 @@ fun HomeScreen(
                         onToggleContact = onToggleContact,
                         onFetchPublicProfile = onFetchPublicProfile
                     )
-                    2 -> ProfileTab(
+                    3 -> ProfileTab(
                         account = account,
                         settings = settings,
                         isBusy = isBusy,
